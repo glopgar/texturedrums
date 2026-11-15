@@ -2,12 +2,13 @@
 export const NCH = 10, NSTEP = 16, NMACRO = 8, NVOICE = 4;
 
 export const MODELS = ['BD 808', 'BD 909', 'SD 808', 'SD 909', 'CLAP', 'HAT', 'CYMBAL', 'TOM', 'COWBELL', 'RIM', 'NOISE', 'FM'];
-export const MODS = ['OFF', 'RING', 'FM', 'FILTER', 'GATE'];
+export const MODS = ['OFF', 'RING', 'FM', 'FILTER'];
+export const CHMODES = ['DRUM', 'GRAIN', 'SYNTH'], WAVES = ['SAW', 'SQR', 'TRI', 'SIN'];
 
 // [id, min, max, default, kind]   kind: lin (default) | exp | i (integer)
 const C = [
-  ['mix', 0, 1, 0],                 // 0 = drum only, 0.5 = both, 1 = grains only
-  ['mod.type', 0, 4, 0, 'i'],       // how the grains modulate the drum
+  ['mode', 0, 2, 0, 'i'],           // what the channel is: drum, granular sampler or synth
+  ['mod.type', 0, 3, 0, 'i'],       // drum / synth modes: how the grains modulate the voice
   ['mod.amt', 0, 1, 0.5],
   // drum: analog model + sample layer
   ['d.model', 0, MODELS.length - 1, 0, 'i'],
@@ -19,6 +20,13 @@ const C = [
   ['s.tune', -24, 24, 0],
   ['s.decay', 0, 1, 1],
   ['s.start', 0, 0.95, 0],
+  // synth: oscillators, filter, envelopes
+  ['y.w1', 0, 3, 0, 'i'], ['y.w2', 0, 3, 0, 'i'],
+  ['y.semi', -24, 24, 0, 'i'], ['y.det', 0, 1, 0.2], ['y.mix', 0, 1, 0.5], ['y.sub', 0, 1, 0.3], ['y.pw', 0, 1, 0],
+  ['y.oct', -3, 3, -1, 'i'], ['y.glide', 0, 1, 0.2],
+  ['y.cut', 30, 18000, 600, 'exp'], ['y.res', 0, 1, 0.4], ['y.env', 0, 1, 0.5], ['y.fdec', 0.01, 5, 0.25, 'exp'],
+  ['y.atk', 0.001, 2, 0.003, 'exp'], ['y.dec', 0.01, 5, 0.4, 'exp'], ['y.sus', 0, 1, 0.5], ['y.rel', 0.01, 5, 0.15, 'exp'],
+  ['y.gate', 0.05, 4, 0.6],         // note length in steps; over 1 ties into the next note (legato + glide)
   // granular sampler: loop
   ['g.start', 0, 1, 0],
   ['g.end', 0, 1, 1],

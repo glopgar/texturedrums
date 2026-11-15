@@ -1,10 +1,10 @@
 // Sequencer tracks: plain arrays so they travel as JSON. Randomising and slow evolution live here.
 import { NSTEP, clamp } from './params.js';
 
-export const FIELDS = ['on', 'vel', 'prob', 'note', 'rat', 'mix'];   // mix: -1 = the channel's MIX knob, 0…1 = this step's own mix
+export const FIELDS = ['on', 'vel', 'prob', 'note', 'rat'];
 export const newTrack = () => ({
   on: new Array(NSTEP).fill(0), vel: new Array(NSTEP).fill(0.75), prob: new Array(NSTEP).fill(1),
-  note: new Array(NSTEP).fill(0), rat: new Array(NSTEP).fill(1), mix: new Array(NSTEP).fill(-1),
+  note: new Array(NSTEP).fill(0), rat: new Array(NSTEP).fill(1),
 });
 export const cloneTrack = (t) => Object.fromEntries(FIELDS.map((f) => [f, t[f].slice()]));
 export const sameStep = (a, b, i) => a.on[i] === b.on[i] && (!a.on[i] || FIELDS.every((f) => a[f][i] === b[f][i]));
@@ -63,7 +63,7 @@ export function mutate(t, base, rnd, amt, melodic, len) {
     } else if (kind < 0.45 && off.length) {                  // add a ghost note
       const j = pick(off, rnd);
       t.on[j] = 1; t.vel[j] = 0.3 + rnd() * 0.3; t.prob[j] = 0.4 + rnd() * 0.4; t.rat[j] = 1;
-      t.note[j] = melodic && on.length ? t.note[pick(on, rnd)] : 0; t.mix[j] = -1; changed = true;
+      t.note[j] = melodic && on.length ? t.note[pick(on, rnd)] : 0; changed = true;
     } else if (kind < 0.58 && on.length > 1) {               // drop a hit
       t.on[pick(on, rnd)] = 0; changed = true;
     } else if (kind < 0.74 && on.length) {                   // change the odds of a hit

@@ -30,6 +30,11 @@ function loadState(st) {
     if (src) for (const f of FIELDS) if (Array.isArray(src[f])) src[f].forEach((v, i) => { if (i < tr[f].length && typeof v === 'number') tr[f][i] = v; });
     S.pat[c] = tr; S.live[c] = cloneTrack(tr);
   }
+  // states saved when channels still had a MIX control: mostly grains becomes a GRAIN channel; the GATE modulation is gone
+  for (let c = 0; c < NCH; c++) {
+    const mix = st.params?.[`c${c}.mix`];
+    if (typeof mix === 'number') { if (st.params[`c${c}.mod.type`] === 4) S.params[`c${c}.mod.type`] = 0; if (mix >= 0.5 && !st.params[`c${c}.mode`]) S.params[`c${c}.mode`] = 1; }
+  }
   S.macros = emptyMacros();
   (st.macros || []).slice(0, NMACRO).forEach((m, i) => {
     S.macros[i] = { name: m.name || `Macro ${i + 1}`, value: clamp(+m.value || 0, 0, 1), targets: (m.targets || []).filter((x) => PMAP.has(x.id)).map((x) => ({ id: x.id, from: clamp(+x.from || 0, 0, 1), to: clamp(+x.to || 0, 0, 1) })) };
@@ -53,7 +58,7 @@ app.setParam = (id, v) => {
   v = clamp(d.kind === 'i' ? Math.round(v) : v, d.min, d.max);
   if (S.params[id] === v) return;
   S.params[id] = v; post({ type: 'param', id, v });
-  ui.refresh(id); if (d.key === 'mix') ui.refreshTabs();
+  ui.refresh(id); if (d.key === 'mode' || d.key === 'mod.type') ui.refreshTabs();
   autosave();
 };
 app.selectFx = (id) => { S.tab = id; ui.refreshTabs(); };
@@ -83,7 +88,7 @@ app.setStep = (c, i, s) => {
   post({ type: 'step', c, i, s }); seq.drawCell(c, i); autosave();
 };
 const setTrack = (c, tr) => { S.pat[c] = cloneTrack(tr); S.live[c] = cloneTrack(tr); post({ type: 'track', c, track: tr, base: tr }); seq.drawTrack(c); autosave(); };
-app.randomTrack = (c) => setTrack(c, randomTrack(Math.random, S.params[`c${c}.len`], S.params[`c${c}.mix`] > 0.3));
+app.randomTrack = (c) => setTrack(c, randomTrack(Math.random, S.params[`c${c}.len`], S.params[`c${c}.mode`] > 0));
 app.randomAll = () => { for (let c = 0; c < NCH; c++) app.randomTrack(c); };
 app.clearAll = () => { for (let c = 0; c < NCH; c++) setTrack(c, newTrack()); };
 app.revert = () => { S.live = S.pat.map(cloneTrack); post({ type: 'revert' }); seq.drawAll(); };

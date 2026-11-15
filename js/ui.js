@@ -1,5 +1,5 @@
 // Panel widgets (knob, switch, list, number) and the upper areas: channel and effect tabs, their panels, macros.
-import { PMAP, NCH, NMACRO, NVOICE, MODELS, MODS, toNorm, fromNorm, clamp } from '../dsp/params.js';
+import { PMAP, NCH, NMACRO, NVOICE, MODELS, MODS, CHMODES, WAVES, toNorm, fromNorm, clamp } from '../dsp/params.js';
 import { pool, index, peaks } from './samples.js';
 import { t } from './i18n.js';
 
@@ -11,13 +11,19 @@ export const h = (tag, attrs = {}, ...kids) => {
   for (const k of kids.flat(Infinity)) if (k != null) el.append(k);
   return el;
 };
+// Colour of a channel wherever it shows: amber drum or blue synth, shading to teal with the grains
+export function tint(S, el, c) {
+  const mode = S.params[`c${c}.mode`];
+  el.style.setProperty('--mix', mode === 1 ? 1 : 0); el.style.setProperty('--base', mode === 2 ? 'var(--synth)' : 'var(--drum)');
+}
 export const MCOL = ['#ff6b6b', '#ffa94d', '#ffd43b', '#a9e34b', '#63e6be', '#4dabf7', '#b197fc', '#f783ac'];
 
 const pct = (v) => `${Math.round(v * 100)}%`, st = (v) => `${v > 0 ? '+' : ''}${Number.isInteger(v) ? v : v.toFixed(1)} st`;
 const bal = (a, b) => (v) => (v <= 0.005 ? a : v >= 0.995 ? b : `${Math.round((1 - v) * 100)}:${Math.round(v * 100)}`);
 const hz = (v) => `${v < 10 ? v.toFixed(2) : v.toFixed(0)} Hz`, secs = (v) => (v < 1 ? `${Math.round(v * 1000)} ms` : `${v.toFixed(1)} s`);
 const FMT = {
-  mix: bal('DRUM', 'GRAIN'), 'd.smix': bal('ANALOG', 'SAMPLE'), 'd.tune': st, 's.tune': st, 'g.pitch': st,
+  'y.semi': st, 'y.oct': (v) => `${v > 0 ? '+' : ''}${v}`, 'y.det': (v) => `${Math.round(v * 50)} ct`, 'y.cut': (v) => (v < 1000 ? `${Math.round(v)} Hz` : `${(v / 1000).toFixed(1)} k`),
+  'y.fdec': secs, 'y.atk': secs, 'y.dec': secs, 'y.rel': secs, 'y.gate': (v) => `${Math.round(v * 100)}%`, 'd.smix': bal('ANALOG', 'SAMPLE'), 'd.tune': st, 's.tune': st, 'g.pitch': st,
   'g.n1': st, 'g.n2': st, 'g.n3': st, 'g.n4': st,
   'g.size': (v) => `${Math.round(v)} ms`, 'g.dens': hz, 'g.lsRate': hz, 'g.leRate': hz, 'g.speed': (v) => `${v.toFixed(2)}×`,
   'g.atk': secs, 'g.dec': secs, 'f.cut': (v) => (v < 1000 ? `${Math.round(v)} Hz` : `${(v / 1000).toFixed(1)} k`),
@@ -28,6 +34,7 @@ export const fmt = (d, v) => (FMT[d.key] || pct)(v);
 const OPTS = {
   'g.mode': ['FWD', 'REV', 'PING'], 'g.lfoShape': ['SIN', 'TRI', 'RND'], 'g.env': ['TRIG', 'DRONE'], 'g.sync': ['FREE', 'SYNC'],
   'g.voices': ['1', '2', '3', '4'], 'f.type': ['OFF', 'LP', 'HP', 'BP'], 'mod.type': MODS, 'd.model': MODELS,
+  mode: CHMODES, 'y.w1': WAVES, 'y.w2': WAVES,
   choke: ['–', 'A', 'B', 'C', 'D'], 'evo.bars': ['1', '2', '4', '8'],
 };
 
@@ -150,25 +157,32 @@ export function buildUI(app) {
   const panel = document.getElementById('panel');
   const voices = Array.from({ length: NVOICE }, (_, i) => col(K(`g.n${i + 1}`, `PITCH ${i + 1}`), K(`g.o${i + 1}`, `OFFSET ${i + 1}`)));
   const chPanel = h('div', { class: 'pages' }), G = (id, label) => knob({ id, label });
-  chPanel.append(
-    h('div', { class: 'prow' },
-      box('GRANULAR SAMPLER', 'grain wide', col(source('g'), wave)),
-      box('LOOP', 'grain', col(
-        row(K('g.start', 'START'), K('g.end', 'END'), K('g.speed', 'SPEED'), col(seg({ key: 'g.mode' }), seg({ key: 'g.sync' }))),
-        row(K('g.lsRate', 'LFO▸START'), K('g.lsDepth', 'DEPTH'), K('g.leRate', 'LFO▸END'), K('g.leDepth', 'DEPTH'), seg({ key: 'g.lfoShape', cls: 'vert' })))),
-      box('GRAINS', 'grain', col(
-        row(K('g.size', 'SIZE'), K('g.dens', 'DENSITY'), K('g.jit', 'SCATTER'), K('g.pjit', 'P.SCATTER')),
-        row(K('g.spread', 'STEREO'), K('g.shape', 'SHAPE'), K('g.rev', 'REVERSE'), K('g.pitch', 'PITCH')))),
-      box('NOTES', 'grain', col(seg({ key: 'g.voices', label: 'VOICES' }), row(voices))),
-      box('ENVELOPE', 'grain', col(seg({ key: 'g.env' }), row(K('g.atk', 'ATTACK'), K('g.dec', 'DECAY')))),
-      box('SENDS', 'master', row(K('dly', 'DELAY'), K('rev', 'REVERB'), K('crs', 'CRUSHER')))),
-    h('div', { class: 'prow' },
-      box('DRUM', 'drum', row(list({ key: 'd.model', label: 'CIRCUIT' }), K('d.tune', 'TUNE'), K('d.decay', 'DECAY'), K('d.tone', 'TONE'), K('d.snap', 'SNAP'))),
-      box('DRUM SAMPLE', 'drum', row(source('d', true), K('d.smix', 'ANA ↔ SMP'), K('s.tune', 'TUNE'), K('s.decay', 'DECAY'), K('s.start', 'START'))),
-      box('MIX · MOD', 'mixbox', row(K('mix', 'DRUM ↔ GRAIN', { cls: 'big' }), col(seg({ key: 'mod.type', label: 'GRAINS MODULATE DRUM' }), row(K('mod.amt', 'AMOUNT'), h('button', { class: 'audition', title: t('trigTip'), onpointerdown: () => app.trig(S.sel) }, `▶ ${t('trig')}`))))),
-      box('FILTER · OUT', 'strip', row(seg({ key: 'f.type', cls: 'vert' }), K('f.cut', 'CUTOFF'), K('f.res', 'RESO'), K('drive', 'DRIVE'), h('span', { class: 'vsep' }),
-        K('vol', 'LEVEL'), K('pan', 'PAN'), seg({ key: 'choke', label: 'CHOKE', cls: 'vert2' })))),
-  );
+  const modBox = box('GRAIN MOD', 'grain', row(seg({ key: 'mod.type', label: 'GRAINS MODULATE THE VOICE' }), K('mod.amt', 'AMOUNT')));
+  // row 1: what the channel is, and its way out; row 2: the main voice; row 3: the granular sampler
+  const rowTop = h('div', { class: 'prow' },
+    box('CHANNEL', 'mixbox', col(seg({ key: 'mode', cls: 'vert' }), h('button', { class: 'audition', title: t('trigTip'), onpointerdown: () => app.trig(S.sel) }, `▶ ${t('trig')}`))),
+    modBox,
+    box('FILTER · OUT', 'strip', row(seg({ key: 'f.type', cls: 'vert' }), K('f.cut', 'CUTOFF'), K('f.res', 'RESO'), K('drive', 'DRIVE'), h('span', { class: 'vsep' }),
+      K('vol', 'LEVEL'), K('pan', 'PAN'), seg({ key: 'choke', label: 'CHOKE', cls: 'vert2' }))),
+    box('SENDS', 'master', row(K('dly', 'DELAY'), K('rev', 'REVERB'), K('crs', 'CRUSHER'))));
+  const rowDrum = h('div', { class: 'prow' },
+    box('DRUM', 'drum', row(list({ key: 'd.model', label: 'CIRCUIT' }), K('d.tune', 'TUNE'), K('d.decay', 'DECAY'), K('d.tone', 'TONE'), K('d.snap', 'SNAP'))),
+    box('DRUM SAMPLE', 'drum', row(source('d', true), K('d.smix', 'ANA ↔ SMP'), K('s.tune', 'TUNE'), K('s.decay', 'DECAY'), K('s.start', 'START'))));
+  const rowSyn = h('div', { class: 'prow' },
+    box('OSCILLATORS', 'synth', row(seg({ key: 'y.w1', label: 'OSC 1', cls: 'vert2' }), seg({ key: 'y.w2', label: 'OSC 2', cls: 'vert2' }), K('y.semi', 'OSC2 SEMI'), K('y.det', 'DETUNE'), K('y.mix', 'OSC2 MIX'), K('y.sub', 'SUB'), K('y.pw', 'PULSE W'), K('y.oct', 'OCTAVE'))),
+    box('SYNTH FILTER', 'synth', row(K('y.cut', 'CUT'), K('y.res', 'RES'), K('y.env', 'ENV AMT'), K('y.fdec', 'ENV DEC'))),
+    box('AMP · NOTE', 'synth', row(K('y.atk', 'ATTACK'), K('y.dec', 'DECAY'), K('y.sus', 'SUSTAIN'), K('y.rel', 'RELEASE'), h('span', { class: 'vsep' }), K('y.gate', 'GATE', { tip: t('gateTip') }), K('y.glide', 'GLIDE'))));
+  const rowGrain = h('div', { class: 'prow' },
+    box('GRANULAR SAMPLER', 'grain wide', col(source('g'), wave)),
+    box('LOOP', 'grain', col(
+      row(K('g.start', 'START'), K('g.end', 'END'), K('g.speed', 'SPEED'), col(seg({ key: 'g.mode' }), seg({ key: 'g.sync' }))),
+      row(K('g.lsRate', 'LFO▸START'), K('g.lsDepth', 'DEPTH'), K('g.leRate', 'LFO▸END'), K('g.leDepth', 'DEPTH'), seg({ key: 'g.lfoShape', cls: 'vert' })))),
+    box('GRAINS', 'grain', col(
+      row(K('g.size', 'SIZE'), K('g.dens', 'DENSITY'), K('g.jit', 'SCATTER'), K('g.pjit', 'P.SCATTER')),
+      row(K('g.spread', 'STEREO'), K('g.shape', 'SHAPE'), K('g.rev', 'REVERSE'), K('g.pitch', 'PITCH')))),
+    box('NOTES', 'grain', col(seg({ key: 'g.voices', label: 'VOICES' }), row(voices))),
+    box('ENVELOPE', 'grain', col(seg({ key: 'g.env' }), row(K('g.atk', 'ATTACK'), K('g.dec', 'DECAY')))));
+  chPanel.append(rowTop, rowDrum, rowSyn, rowGrain);
   // one page per effect; every channel has a send to each
   const fxPages = [
     h('div', { class: 'prow fxpage' }, box('DELAY', 'master', row(G('dly.time', 'TIME'), G('dly.fb', 'FEEDBACK'), G('dly.tone', 'TONE'), G('dly.lvl', 'LEVEL'))), sendsBox('dly')),
@@ -260,9 +274,13 @@ export function buildUI(app) {
       for (const s of sendNames) s.el.textContent = `${s.c + 1} ${S.names[s.c]}`;
       tabEls.forEach((el, c) => {
         el.classList.toggle('on', S.tab === 'ch' && c === S.sel); el.lastChild.textContent = S.names[c];
-        el.style.setProperty('--mix', S.params[`c${c}.mix`]);
+        tint(S, el, c);
       });
-      panel.style.setProperty('--mix', S.params[`c${S.sel}.mix`]);
+      tint(S, panel, S.sel);
+      // show the selected mode's controls; the granular row appears when the grains are heard or modulate the voice
+      const q = (k) => S.params[`c${S.sel}.${k}`], mode = q('mode');
+      rowDrum.hidden = mode !== 0; rowSyn.hidden = mode !== 2; modBox.hidden = mode === 1;
+      rowGrain.hidden = !(mode === 1 || q('mod.type') > 0);
     },
     refreshMacros() { macEls.forEach((m) => m.draw()); hint.textContent = S.learn >= 0 ? t('learning', S.macros[S.learn].name) : ''; document.body.classList.toggle('learning', S.learn >= 0); },
     refreshSources(fill) { for (const s of app.sources) if (fill) s.fill(); else s.draw(); },

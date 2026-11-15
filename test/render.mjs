@@ -4,6 +4,7 @@ import { Engine } from '../dsp/engine.js';
 import { PARAMS, PMAP, MODELS, MODS, NCH, CK, rng } from '../dsp/params.js';
 import { Drum } from '../dsp/drums.js';
 import { Granular } from '../dsp/grain.js';
+import { Synth } from '../dsp/synth.js';
 import { parseWav, normalise } from '../dsp/wav.js';
 import { TEXTURES, buildTexture } from '../dsp/textures.js';
 import { fromString, newTrack, randomTrack, mutate, cloneTrack, sameStep } from '../dsp/pattern.js';
@@ -141,7 +142,43 @@ function load(st, seed) {
   console.log('  grain levels', lv.map((v) => v.toFixed(3)).join(' '));
 }
 
-// 5. channel: mix and the five ways the grains can modulate the drum
+// 4b. synth voice
+{
+  const freq = (x, a, b) => { let c = 0; for (let i = a + 1; i < b; i++) if (x[i - 1] < 0 && x[i] >= 0) c++; return c * SR / (b - a); };
+  const play = (o, notes, secs = 1, step = SR / 8) => {      // notes: [time in steps, note]
+    const s = new Synth(SR), p = chp({ 'y.w1': 3, 'y.w2': 3, 'y.mix': 0, 'y.sub': 0, 'y.cut': 18000, 'y.res': 0, 'y.env': 0, ...o }), out = new Float32Array(SR * secs);
+    let k = 0;
+    for (let i = 0; i + 16 <= out.length; i += 16) { while (k < notes.length && notes[k][0] * step <= i) { s.trigger(1, notes[k][1], p, step); k++; } s.render(out.subarray(i, i + 16), 16, p); }
+    return { out, s };
+  };
+  for (const [note, oct, f] of [[0, 0, 130.81], [9, 1, 440], [0, -2, 32.7], [-12, 2, 261.63]]) {
+    const got = freq(play({ 'y.oct': oct, 'y.gate': 4, 'y.sus': 1 }, [[0, note]]).out, SR * 0.1, SR * 0.4);
+    ok(Math.abs(got / f - 1) < 0.02, `synth pitch note ${note} octave ${oct}: ${got.toFixed(1)} Hz, expected ${f}`);
+  }
+  for (const w of [0, 1, 2, 3]) {
+    const { out } = play({ 'y.w1': w, 'y.oct': 0, 'y.gate': 4, 'y.sus': 1 }, [[0, 0]]);
+    ok(finite(out) && peak(out) > 0.2 && peak(out) < 1.1 && Math.abs(freq(out, SR * 0.1, SR * 0.4) / 130.81 - 1) < 0.02, `synth wave ${w}: peak ${peak(out).toFixed(2)}`);
+  }
+  // a note ends after its gate and the voice goes quiet
+  const short = play({ 'y.gate': 0.5, 'y.rel': 0.05 }, [[0, 0]]);
+  ok(rms(short.out, 0, SR / 16) > 0.1 && rms(short.out, SR * 0.4) < 1e-4 && !short.s.active, 'synth: gate and release');
+  // separate notes restart the envelope; tied notes (gate over 100%) do not, and slide to the new pitch
+  const sep = play({ 'y.oct': 0, 'y.gate': 0.5, 'y.atk': 0.02, 'y.rel': 0.01 }, [[0, 0], [1, 12]]), tie = play({ 'y.oct': 0, 'y.gate': 4, 'y.atk': 0.02, 'y.glide': 0.25, 'y.sus': 1 }, [[0, 0], [1, 12]]);
+  const at = SR / 8;
+  ok(rms(sep.out, at, at + 200) < 0.05 && rms(tie.out, at, at + 200) > 0.3, 'synth: tied notes play legato');
+  const early = freq(tie.out, at + 480, at + 2400), late = freq(tie.out, at + SR * 0.25, at + SR * 0.35);
+  ok(early > 135 && early < 240 && Math.abs(late / 261.63 - 1) < 0.03, `synth: glide on tied notes (${early.toFixed(0)} Hz then ${late.toFixed(0)} Hz)`);
+  // the filter closes with its envelope, and survives full resonance
+  const bright = play({ 'y.w1': 0, 'y.cut': 200, 'y.env': 1, 'y.fdec': 0.1, 'y.gate': 4, 'y.sus': 1 }, [[0, 0]]).out;
+  const hf = (x, a, b) => { let s = 0; for (let i = a + 1; i < b; i++) s += (x[i] - x[i - 1]) ** 2; return Math.sqrt(s / (b - a)); };
+  ok(hf(bright, 200, 2000) > hf(bright, SR * 0.5, SR * 0.5 + 4000) * 3, 'synth: filter envelope');
+  for (const [cut, res, env] of [[30, 1, 1], [18000, 1, 1], [18000, 1, 0], [500, 1, 1]]) {
+    const { out } = play({ 'y.w1': 0, 'y.w2': 1, 'y.mix': 1, 'y.sub': 1, 'y.pw': 1, 'y.cut': cut, 'y.res': res, 'y.env': env, 'y.oct': 3, 'y.gate': 4 }, [[0, 24]]);
+    ok(finite(out) && peak(out) < 2.5, `synth: unstable at cutoff ${cut} resonance ${res} (peak ${peak(out).toFixed(2)})`);
+  }
+}
+
+// 5. channel: the three modes and the ways the grains can modulate the voice
 {
   const one = (o) => {
     const st = expand(FACTORY.find((f) => f.name === 'Init'));
@@ -151,15 +188,15 @@ function load(st, seed) {
     const en = load(st, 11); en.trig(0, 1, 0);
     return render(en, 1.5)[0];
   };
-  const dry = one({}), grain = one({ mix: 1 }), both = one({ mix: 0.5 });
-  ok(rms(dry) > 0.02 && rms(grain) > 0.005 && rms(both) > rms(dry) * 0.9, 'mix: drum, grains or both');
+  const dry = one({}), grain = one({ mode: 1 });
+  ok(rms(dry) > 0.02 && rms(grain) > 0.005, 'DRUM and GRAIN modes both sound');
   const diff = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return Math.sqrt(s / a.length); };
   MODS.forEach((name, m) => {
     if (!m) return;
-    const x = one({ 'mod.type': m, 'mod.amt': 1, 'g.dens': 60, 'g.size': 40, mix: m === 4 ? 0.5 : 0 }), ref = m === 4 ? both : dry;
+    const x = one({ 'mod.type': m, 'mod.amt': 1, 'g.dens': 60, 'g.size': 40 }), ref = dry;
     ok(finite(x) && rms(x) > 0.005 && peak(x) < 1, `mod ${name}: broken (rms ${rms(x).toFixed(3)})`);
     ok(diff(x, ref) > 0.005, `mod ${name}: no audible effect`);
-    const zero = one({ 'mod.type': m, 'mod.amt': 0, mix: m === 4 ? 0.5 : 0, 'f.cut': 18000 });
+    const zero = one({ 'mod.type': m, 'mod.amt': 0, 'f.cut': 18000 });
     if (m !== 3) ok(diff(zero, ref) < 1e-4, `mod ${name}: amount 0 should leave the sound alone`);
     console.log(`  mod ${name.padEnd(6)} rms ${rms(x).toFixed(3)} (unmodulated ${rms(ref).toFixed(3)})`);
   });
@@ -172,6 +209,15 @@ function load(st, seed) {
     return diff(wet, plain).toFixed(3);
   });
   console.log('  sends (delay, reverb, crusher) add', fxs.join(' '));
+  // channel modes: GRAIN ignores the drum and its modulation; SYNTH plays the synth, and the grains can modulate it too
+  const asGrain = one({ mode: 1, 'mod.type': 1 });
+  ok(diff(asGrain, grain) < 1e-6, 'GRAIN mode should sound like the grains alone');
+  const syn = one({ mode: 2 }), synFm = one({ mode: 2, 'mod.type': 2, 'mod.amt': 1 });
+  ok(finite(syn) && rms(syn) > 0.02 && diff(syn, dry) > 0.01, 'SYNTH mode plays the synth');
+  ok(finite(synFm) && diff(synFm, syn) > 0.005, 'SYNTH mode: the grains modulate the synth');
+  // in DRUM mode the grains are never heard on their own: with nothing to modulate the channel is silent
+  const st0 = expand(FACTORY.find((f) => f.name === 'Init')); st0.params['c0.mod.type'] = 1; st0.params['c0.mod.amt'] = 1; st0.params['c0.g.env'] = 1; st0.gsrc[0] = 'tex/radio';
+  const e0 = load(st0, 3); e0.start(); ok(rms(render(e0, 1)[0]) < 1e-6, 'grains used as modulator are not heard by themselves');
   for (const ft of [1, 2, 3]) { const x = one({ 'f.type': ft, 'f.cut': 800, 'f.res': 1, drive: 1 }); ok(finite(x) && peak(x) < 1, `filter ${ft} at full resonance`); }
 }
 
@@ -213,15 +259,6 @@ function load(st, seed) {
   dr.setParam('c8.mute', 1); ok(rms(render(dr, 1)[0], SR / 2) < 1e-5, 'mute silences a drone');
   dr.setParam('c8.mute', 0); ok(rms(render(dr, 1)[0], SR / 2) > 0.01, 'unmute brings the drone back');
   dr.setParam('c0.solo', 1); ok(rms(render(dr, 1)[0], SR / 2) < 1e-5, 'solo on another channel silences the drone');
-  // per-step mix: a step's own mix holds until the next step, which may go back to the knob
-  st = base(); st.pat[0] = fromString('x...x...x.......'); st.pat[0].mix[0] = 1; st.pat[0].mix[4] = 0.25;
-  const mx = load(st, 1), seen = []; mx.start();
-  for (const secs of [0.05, 0.5, 0.5]) { render(mx, secs); seen.push(mx.ch[0].mixOv); }   // just after steps 0, 4 and 8
-  ok(seen.join() === '1,0.25,-1', `per-step mix: ${seen}`);
-  const snd = (m) => { const q = base(); q.pat[0] = fromString('x...............'); q.pat[0].mix[0] = m; const e = load(q, 1); e.start(); return render(e, 0.4)[0]; };
-  const asDrum = snd(-1), asGrain = snd(1), half = snd(0.5);
-  ok(rms(asGrain) > 0.003 && rms(asDrum) > rms(asGrain) * 2 && rms(half) > rms(asGrain), `per-step mix changes the sound (${[asDrum, half, asGrain].map((x) => rms(x).toFixed(3))})`);
-  ok(finite(half) && Math.max(...Array.from(half.subarray(0, 64), Math.abs)) < 0.5, 'per-step mix: no jump at the step');
   // swing delays every second 16th
   st = base(); st.pat[0] = fromString('xxxxxxxxxxxxxxxx'); st.params.swing = 0.5;
   const en = load(st, 1), at = []; en.start();

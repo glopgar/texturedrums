@@ -1,6 +1,6 @@
 :root {
   --bg: #121416; --panel: #1b1e21; --panel2: #23272b; --line: #33393e; --text: #dfe4e8; --dim: #8b959d;
-  --drum: #f2a33a; --grain: #3fd0c0; --strip: #9aa7b1; --master: #b197fc;
+  --drum: #f2a33a; --grain: #3fd0c0; --synth: #6ea8ff; --strip: #9aa7b1; --master: #b197fc;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
@@ -28,7 +28,7 @@ input[type=number] { width: 54px; font-family: var(--mono); }
 
 main { padding: 8px 12px 14px; min-width: 1180px; }
 #tabs { display: flex; gap: 3px; }
-.tab { --tc: color-mix(in oklab, var(--drum) calc((1 - var(--mix, 0)) * 100%), var(--grain)); flex: 1; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px 6px 0 0; border-bottom: none; background: #16181a; color: var(--dim); min-width: 0; }
+.tab { --tc: color-mix(in oklab, var(--base, var(--drum)) calc((1 - var(--mix, 0)) * 100%), var(--grain)); flex: 1; display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px 6px 0 0; border-bottom: none; background: #16181a; color: var(--dim); min-width: 0; }
 .tab b { color: var(--tc); font-family: var(--mono); }
 .tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; letter-spacing: .05em; }
 .tab.fx { --tc: var(--master); flex: 0.8; }
@@ -42,8 +42,8 @@ main { padding: 8px 12px 14px; min-width: 1180px; }
 #panel { background: var(--panel); border: 1px solid var(--line); border-radius: 0 0 8px 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
 .prow { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
 .box { --c: var(--strip); background: var(--panel2); border: 1px solid var(--line); border-top: 2px solid var(--c); border-radius: 6px; padding: 5px 7px 6px; display: flex; flex-direction: column; flex: 1 0 auto; }
-.box.grain { --c: var(--grain); } .box.drum { --c: var(--drum); } .box.master { --c: var(--master); }
-.box.mixbox { --c: color-mix(in oklab, var(--drum) calc((1 - var(--mix, 0)) * 100%), var(--grain)); }
+.box.grain { --c: var(--grain); } .box.synth { --c: var(--synth); } .box.drum { --c: var(--drum); } .box.master { --c: var(--master); }
+.box.mixbox { --c: color-mix(in oklab, var(--base, var(--drum)) calc((1 - var(--mix, 0)) * 100%), var(--grain)); }
 .box.wide { flex: 4 1 260px; min-width: 240px; }
 .box h3 { margin: 0 0 5px; font-size: 10px; font-weight: 600; letter-spacing: .14em; color: var(--c); }
 .boxin { flex: 1; display: flex; justify-content: center; }
@@ -102,7 +102,7 @@ body.learning .knob, body.learning .num { outline: 1px dashed #ffffff35; outline
 .seqbar .seg { --c: var(--text); }
 .sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
 .trow.head { margin-bottom: 1px; font-size: 8.5px; letter-spacing: .08em; color: var(--dim); text-align: center; }
-.trow { --tc: color-mix(in oklab, var(--drum) calc((1 - var(--mix, 0)) * 100%), var(--grain)); display: grid; grid-template-columns: 104px 22px 22px 26px 34px 44px 44px 1fr; gap: 4px; align-items: center; margin-bottom: 3px; }
+.trow { --tc: color-mix(in oklab, var(--base, var(--drum)) calc((1 - var(--mix, 0)) * 100%), var(--grain)); display: grid; grid-template-columns: 104px 22px 22px 26px 34px 44px 44px 1fr; gap: 4px; align-items: center; margin-bottom: 3px; }
 .tname { display: flex; align-items: center; gap: 6px; padding: 4px 6px; text-align: left; min-width: 0; height: 26px; }
 .tname b { color: var(--tc); font-family: var(--mono); width: 14px; }
 .tname span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
@@ -120,8 +120,6 @@ body.learning .knob, body.learning .num { outline: 1px dashed #ffffff35; outline
 .cell i { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--tc); opacity: var(--p, 1); pointer-events: none; }
 .cell.on i { height: calc(var(--v, 1) * 100%); }
 .cell.acc { border-color: #fff; }
-.cell.lock { --tc: color-mix(in oklab, var(--drum) calc((1 - var(--sm, 0)) * 100%), var(--grain)); }
-#seq[data-mode=mix] .cell.on:not(.lock) i { opacity: .3; }
 .cell span { position: absolute; inset: 0; font: 9px/24px var(--mono); text-align: center; color: #0b0d0e; pointer-events: none; mix-blend-mode: normal; }
 .cell:not(.on) span { color: var(--dim); }
 .cell.out { opacity: .22; }
@@ -137,3 +135,5 @@ dialog::backdrop { background: #000a; }
 dialog h2 { margin: 0 0 8px; letter-spacing: .1em; font-weight: 400; color: var(--grain); }
 dialog form { text-align: right; }
 .vsep { width: 1px; align-self: stretch; background: var(--line); margin: 0 5px; }
+[hidden] { display: none !important; }
+.box.mixbox .seg.vert .segrow button { padding: 3px 12px; }

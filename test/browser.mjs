@@ -38,11 +38,6 @@ ok(await S(() => __app.S.live[0].prob[0]) === 0.5, 'PROB layer: drag down sets 5
 await p.click('.modes button:nth-child(4)');
 await p.mouse.move(c0.x + 10, c0.y + 10); await p.mouse.down(); await p.mouse.move(c0.x + 10, c0.y - 25, { steps: 5 }); await p.mouse.up();
 ok(await S(() => __app.S.live[0].note[0]) === 7, 'NOTE layer: drag up sets +7');
-await p.click('.modes button:nth-child(6)');
-await p.mouse.move(c0.x + 10, c0.y + 10); await p.mouse.down(); await p.mouse.move(c0.x + 10, c0.y - 80, { steps: 5 }); await p.mouse.up();
-{ const m = await S(() => [__app.S.live[0].mix[0], __app.S.pat[0].mix[0]]); ok(m[0] > 0.8 && m[0] === m[1], `MIX layer: drag up sets the step mix (${m})`); }
-ok(await S(() => document.querySelector('.cell[data-c="0"][data-i="0"]').classList.contains('lock')), 'step with its own mix is marked');
-await cell(0, 0).click({ button: 'right' }); ok(await S(() => __app.S.live[0].mix[0]) === -1, 'right-click returns the step to the channel mix');
 await p.click('.modes button:nth-child(1)');
 // knob drag + tab switch shows the other channel's value
 const kb = await p.locator('.pages .knob', { hasText: 'SIZE' }).boundingBox();
@@ -51,6 +46,18 @@ const sz = await S(() => __app.S.params['c0.g.size']); ok(sz > 200, `knob drag c
 await p.click('.tab:nth-child(3)');
 ok(await S(() => __app.S.sel === 2 && document.querySelector('.tab.on span').textContent === 'CP'), 'tab selects the channel');
 ok((await p.locator('.pages .knob', { hasText: 'SIZE' }).locator('.kval').textContent()) === '40 ms', 'panel shows the selected channel values');
+// channel modes: the panel shows the chosen mode's controls
+const vis = () => S(() => [...document.querySelectorAll('.pages > .prow')].map((r) => (r.hidden ? 0 : 1)).join(''));
+await S(() => { __app.select(5); __app.setParam('c5.mod.type', 0); });
+ok(await vis() === '1100', `DRUM mode shows the drum row only (${await vis()})`);
+await p.locator('.pages .seg button', { hasText: /^SYNTH$/ }).click();
+ok(await S(() => __app.S.params['c5.mode']) === 2 && await vis() === '1010', `SYNTH mode shows the synth row (${await vis()})`);
+await p.locator('.pages .seg button', { hasText: /^FM$/ }).click(); ok(await vis() === '1011', 'turning a grain modulation on reveals the granular row');
+ok(await S(() => document.querySelectorAll('.pages .knob.big').length) === 0 && await S(() => document.querySelectorAll('.modes button').length) === 5, 'no MIX knob and no MIX layer');
+await p.locator('.pages .seg button', { hasText: /^GRAIN$/ }).click();
+ok(await vis() === '1001' && await S(() => document.querySelector('.pages .prow .box:nth-child(2)').hidden), `GRAIN mode shows the granular row and hides GRAIN MOD (${await vis()})`);
+{ const lv = await level(); ok(lv > 0.05, `still sounds after switching modes (peak ${lv.toFixed(2)})`); }
+await p.locator('.pages .seg button', { hasText: /^DRUM$/ }).click(); await S(() => { __app.setParam('c5.mod.type', 0); __app.select(2); });
 // effect tabs: each effect has its own page, with the ten channel sends
 for (const [k, name, id] of [[11, 'DELAY', 'dly'], [12, 'REVERB', 'rev'], [13, 'CRUSHER', 'crs']]) {
   await p.click(`.tab:nth-child(${k})`);
@@ -92,6 +99,9 @@ ok(await S(() => __app.S.gsrc[__app.S.sel]) === 'user/mi crash', 'user sample lo
 // preset save / reload persistence / factory switch
 await p.click('#save'); await p.waitForTimeout(300);
 ok(await S(() => Object.keys(JSON.parse(localStorage.getItem('texturedrums.presets')))[0]) === 'Mi preset', 'preset saved');
+await p.selectOption('#preset', { label: 'Marciano' }); await p.waitForTimeout(600);
+await p.selectOption('#preset', { label: 'Acid Clouds' }); await p.waitForTimeout(900);
+{ const lv = await level(); ok(await S(() => __app.S.params['c5.mode']) === 2 && lv > 0.1, `synth preset loads and sounds (peak ${lv.toFixed(2)})`); }
 await p.selectOption('#preset', { label: 'Marciano' }); await p.waitForTimeout(600);
 ok(await S(() => __app.S.name === 'Marciano' && __app.S.params.bpm === 104 && __app.S.macros[0].name === 'Martian'), 'factory preset loads');
 const lv2 = await level(); ok(lv2 > 0.1, `Marciano sounds (peak ${lv2.toFixed(2)})`);

@@ -1,10 +1,10 @@
 // The step sequencer grid: ten tracks shown at once, one editing layer at a time.
 import { NCH, NSTEP, clamp } from '../dsp/params.js';
-import { h } from './ui.js';
+import { h, tint } from './ui.js';
 import { t } from './i18n.js';
 
-const MODES = [['trig', 'TRIG', 'mTrig'], ['vel', 'VEL', 'mVel'], ['prob', 'PROB', 'mProb'], ['note', 'NOTE', 'mNote'], ['rat', 'ROLL', 'mRoll'], ['mix', 'MIX', 'mMix']];
-const DEF = { vel: 0.75, prob: 1, note: 0, rat: 1, mix: -1 };
+const MODES = [['trig', 'TRIG', 'mTrig'], ['vel', 'VEL', 'mVel'], ['prob', 'PROB', 'mProb'], ['note', 'NOTE', 'mNote'], ['rat', 'ROLL', 'mRoll']];
+const DEF = { vel: 0.75, prob: 1, note: 0, rat: 1 };
 
 export function buildSeq(app, ui) {
   const S = app.S, root = document.getElementById('seq');
@@ -33,23 +33,20 @@ export function buildSeq(app, ui) {
     const r = h('div', { class: 'trow' }, name, mk('mute', 'M', t('mute')), mk('solo', 'S', t('solo')),
       dice(c),
       ui.num({ id: `c${c}.len`, tip: t('len'), range: 90 }), ui.num({ id: `c${c}.prob`, tip: t('prob'), cls: 'bar' }), ui.num({ id: `c${c}.evo`, tip: t('evo'), cls: 'bar evo' }), grid);
-    app.controls.push({ id: `c${c}.len`, draw: () => drawTrack(c) }, { id: `c${c}.mix`, draw: () => { r.style.setProperty('--mix', S.params[`c${c}.mix`]); if (S.mode === 'mix') drawTrack(c); } });
+    app.controls.push({ id: `c${c}.len`, draw: () => drawTrack(c) }, { id: `c${c}.mode`, draw: () => tint(S, r, c) });
     rows.push({ el: r, name }); root.append(r);
   }
 
   function drawCell(c, i) {
     const tr = S.live[c], el = cells[c][i], on = !!tr.on[i], m = S.mode;
     el.classList.toggle('on', on); el.classList.toggle('out', i >= S.params[`c${c}.len`]); el.classList.toggle('acc', on && tr.vel[i] >= 0.95);
-    const lock = tr.mix[i] >= 0, chMix = S.params[`c${c}.mix`];
-    el.classList.toggle('lock', lock); el.style.setProperty('--sm', lock ? tr.mix[i] : chMix);
-    const v = m === 'mix' ? (lock ? Math.max(0.12, tr.mix[i]) : chMix) : m === 'prob' ? tr.prob[i] : m === 'note' ? 0.5 + tr.note[i] / 48 : m === 'rat' ? tr.rat[i] / 4 : tr.vel[i];
+    const v = m === 'prob' ? tr.prob[i] : m === 'note' ? 0.5 + tr.note[i] / 48 : m === 'rat' ? tr.rat[i] / 4 : tr.vel[i];
     el.style.setProperty('--v', v.toFixed(3)); el.style.setProperty('--p', (m === 'trig' ? 0.35 + 0.65 * tr.prob[i] : 1).toFixed(2));
     let txt = '';
     if (on || m !== 'trig') {
       if (m === 'trig') txt = (tr.note[i] ? (tr.note[i] > 0 ? '+' : '') + tr.note[i] : '') + (tr.rat[i] > 1 ? `×${tr.rat[i]}` : '');
       else if (m === 'vel') txt = on ? Math.round(tr.vel[i] * 100) : '';
       else if (m === 'prob') txt = on ? Math.round(tr.prob[i] * 100) : '';
-      else if (m === 'mix') txt = lock ? (tr.mix[i] <= 0 ? 'D' : tr.mix[i] >= 1 ? 'G' : Math.round(tr.mix[i] * 100)) : '';
       else if (m === 'note') txt = on || tr.note[i] ? (tr.note[i] > 0 ? '+' : '') + tr.note[i] : '';
       else txt = on || tr.rat[i] > 1 ? `×${tr.rat[i]}` : '';
     }
@@ -80,7 +77,7 @@ export function buildSeq(app, ui) {
       app.setStep(c, i, { on });
       move = (ev) => { const o = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.cell'); if (o && +o.dataset.c === c && S.live[c].on[+o.dataset.i] !== on) app.setStep(c, +o.dataset.i, { on }); };
     } else {
-      const y0 = e.clientY, v0 = m === 'mix' && tr.mix[i] < 0 ? S.params[`c${c}.mix`] : tr[m][i];
+      const y0 = e.clientY, v0 = tr[m][i];
       if (m === 'vel' && !tr.on[i]) app.setStep(c, i, { on: 1 });
       move = (ev) => {
         const dy = y0 - ev.clientY;
