@@ -4,6 +4,8 @@
 
 Ten identical channels, each with a **drum voice** (a modelled analog circuit plus a sample) and a **granular sampler**, driven by a 10-track XOX sequencer with probabilities, randomising and slow pattern evolution. Eight macros move groups of controls at once. Static web app with no dependencies and no build step (AudioWorklet + Web MIDI).
 
+**Try it online: <https://glopgar.github.io/texturedrums/>**
+
 ## Running it
 
 ```bash
