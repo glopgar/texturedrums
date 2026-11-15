@@ -1,0 +1,108 @@
+{
+ "kits": [
+  {
+   "id": "CR-78",
+   "name": "Roland CompuRhythm CR-78",
+   "license": "Public Domain",
+   "source": "http://www.boxedear.com/free.html",
+   "files": [
+    "bongo-h",
+    "bongo-l",
+    "conga-l",
+    "cowbell",
+    "cymbal",
+    "guiro-long",
+    "guiro-short",
+    "hihat",
+    "hihat-accent",
+    "hihat-metal",
+    "kick",
+    "kick-accent",
+    "rim",
+    "snare",
+    "snare-accent",
+    "tamb-long",
+    "tamb-short"
+   ]
+  },
+  {
+   "id": "LM-2",
+   "name": "LinnDrum LM-2",
+   "license": "Public Domain",
+   "source": "http://machines.hyperreal.org/manufacturers/Linn/LinnDrum/",
+   "files": [
+    "cabasa",
+    "clap",
+    "conga-h",
+    "conga-hh",
+    "conga-l",
+    "conga-ll",
+    "conga-lll",
+    "conga-m",
+    "cowb",
+    "crash",
+    "hihat-closed",
+    "hihat-closed-long",
+    "hihat-closed-short",
+    "hihat-open",
+    "kick",
+    "kick-alt",
+    "ride",
+    "snare-h",
+    "snare-l",
+    "snare-m",
+    "stick-h",
+    "stick-l",
+    "stick-m",
+    "tamb",
+    "tom-h",
+    "tom-hh",
+    "tom-l",
+    "tom-ll",
+    "tom-m"
+   ]
+  },
+  {
+   "id": "MRK-2",
+   "name": "Maestro Rhythm King MRK-2",
+   "license": "Public Domain",
+   "source": "http://www.submodern.com/slowburn/?p=736",
+   "files": [
+    "block",
+    "bongo",
+    "clave",
+    "cymball-long",
+    "cymball-short",
+    "hihat-closed",
+    "hihat-open",
+    "kick",
+    "snare",
+    "tom"
+   ]
+  },
+  {
+   "id": "TR-505",
+   "name": "Roland TR-505",
+   "license": "Public Domain",
+   "source": "http://www.progsounds.com/downloads/progsounds-roland-tr-505-samples-pack",
+   "files": [
+    "clap",
+    "conga-h",
+    "conga-l",
+    "cowb-h",
+    "cowb-l",
+    "crash",
+    "hihat-closed",
+    "hihat-open",
+    "kick",
+    "ride",
+    "rim",
+    "snare",
+    "timbal",
+    "tom-h",
+    "tom-l",
+    "tom-m"
+   ]
+  }
+ ]
+}

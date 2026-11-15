@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TextureDrums — caja de ritmos granular</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+<header id="bar">
+  <span class="logo">TEXTURE<b>DRUMS</b></span>
+  <button id="play" class="play" data-i18n-title="playTip"><i class="led"></i><span data-i18n="play"></span></button>
+  <label class="fld">BPM <input id="bpm" type="number" min="40" max="240" step="1"></label>
+  <label class="fld">SWING <input id="swing" type="number" min="0" max="60" step="1"></label>
+  <div class="grp">
+    <select id="preset"></select>
+    <button id="save" data-i18n="save"></button>
+    <button id="del" data-i18n="del"></button>
+    <button id="export" data-i18n="export"></button>
+    <button id="import" data-i18n="import"></button>
+    <input id="file" type="file" accept=".json,application/json" hidden>
+    <input id="audiofile" type="file" accept="audio/*" hidden>
+  </div>
+  <div class="grp" id="fx"></div>
+  <span id="status"></span>
+  <div class="grp right">
+    <button id="help" data-i18n="help"></button>
+    <select id="lang"><option value="es">Español</option><option value="en">English</option></select>
+  </div>
+</header>
+<main>
+  <nav id="tabs"></nav>
+  <div id="panel"></div>
+  <div id="macros"></div>
+  <div id="seq"></div>
+</main>
+<div id="menu" hidden></div>
+<dialog id="dlg"></dialog>
+<script type="module" src="js/main.js?v=1"></script>
+</body>
+</html>
