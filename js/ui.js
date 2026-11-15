@@ -1,4 +1,4 @@
-// Panel widgets (knob, switch, list, number) and the three upper areas: tabs, channel panel, macros.
+// Panel widgets (knob, switch, list, number) and the upper areas: channel and effect tabs, their panels, macros.
 import { PMAP, NCH, NMACRO, NVOICE, MODELS, MODS, toNorm, fromNorm, clamp } from '../dsp/params.js';
 import { pool, index, peaks } from './samples.js';
 import { t } from './i18n.js';
@@ -128,19 +128,29 @@ export function buildUI(app) {
   const box = (title, cls, ...kids) => h('section', { class: `box ${cls}` }, h('h3', {}, title), h('div', { class: 'boxin' }, kids));
   const col = (...kids) => h('div', { class: 'col' }, kids), row = (...kids) => h('div', { class: 'row' }, kids);
   const K = (key, label, extra) => knob({ key, label, ...extra });
+  // the ten channels' sends to one effect, side by side on that effect's page
+  const sendNames = [];
+  function sendsBox(key) {
+    return box('SENDS FROM EACH CHANNEL', 'strip wide', row(Array.from({ length: NCH }, (_, c) => {
+      const el = knob({ id: `c${c}.${key}`, label: '' }); sendNames.push({ c, el: el.firstChild }); return el;
+    })));
+  }
 
   // ---- tabs ----
   const tabs = document.getElementById('tabs');
   const tabEls = Array.from({ length: NCH }, (_, c) => h('button', {
     class: 'tab', onclick: () => app.select(c), ondblclick: () => app.rename(c),
   }, h('i', { class: 'led' }), h('b', {}, `${c + 1}`), h('span')));
-  tabs.append(...tabEls);
+  const FX = [['dly', 'DELAY'], ['rev', 'REVERB'], ['crs', 'CRUSHER']];
+  const fxTabs = FX.map(([id, name]) => h('button', { class: 'tab fx', onclick: () => app.selectFx(id) }, h('b', {}, 'FX'), h('span', {}, name)));
+  tabs.append(...tabEls, ...fxTabs);
 
   // ---- channel panel ----
   const wave = h('canvas', { class: 'wave' });
   const panel = document.getElementById('panel');
   const voices = Array.from({ length: NVOICE }, (_, i) => col(K(`g.n${i + 1}`, `PITCH ${i + 1}`), K(`g.o${i + 1}`, `OFFSET ${i + 1}`)));
-  panel.append(
+  const chPanel = h('div', { class: 'pages' }), G = (id, label) => knob({ id, label });
+  chPanel.append(
     h('div', { class: 'prow' },
       box('GRANULAR SAMPLER', 'grain wide', col(source('g'), wave)),
       box('LOOP', 'grain', col(
@@ -150,18 +160,23 @@ export function buildUI(app) {
         row(K('g.size', 'SIZE'), K('g.dens', 'DENSITY'), K('g.jit', 'SCATTER'), K('g.pjit', 'P.SCATTER')),
         row(K('g.spread', 'STEREO'), K('g.shape', 'SHAPE'), K('g.rev', 'REVERSE'), K('g.pitch', 'PITCH')))),
       box('NOTES', 'grain', col(seg({ key: 'g.voices', label: 'VOICES' }), row(voices))),
-      box('ENVELOPE', 'grain', col(seg({ key: 'g.env' }), row(K('g.atk', 'ATTACK'), K('g.dec', 'DECAY'))))),
+      box('ENVELOPE', 'grain', col(seg({ key: 'g.env' }), row(K('g.atk', 'ATTACK'), K('g.dec', 'DECAY')))),
+      box('SENDS', 'master', row(K('dly', 'DELAY'), K('rev', 'REVERB'), K('crs', 'CRUSHER')))),
     h('div', { class: 'prow' },
       box('DRUM', 'drum', row(list({ key: 'd.model', label: 'CIRCUIT' }), K('d.tune', 'TUNE'), K('d.decay', 'DECAY'), K('d.tone', 'TONE'), K('d.snap', 'SNAP'))),
       box('DRUM SAMPLE', 'drum', row(source('d', true), K('d.smix', 'ANA ↔ SMP'), K('s.tune', 'TUNE'), K('s.decay', 'DECAY'), K('s.start', 'START'))),
       box('MIX · MOD', 'mixbox', row(K('mix', 'DRUM ↔ GRAIN', { cls: 'big' }), col(seg({ key: 'mod.type', label: 'GRAINS MODULATE DRUM' }), row(K('mod.amt', 'AMOUNT'), h('button', { class: 'audition', title: t('trigTip'), onpointerdown: () => app.trig(S.sel) }, `▶ ${t('trig')}`))))),
       box('FILTER · OUT', 'strip', row(seg({ key: 'f.type', cls: 'vert' }), K('f.cut', 'CUTOFF'), K('f.res', 'RESO'), K('drive', 'DRIVE'), h('span', { class: 'vsep' }),
-        K('vol', 'LEVEL'), K('pan', 'PAN'), K('dly', 'DELAY'), K('rev', 'REVERB'), seg({ key: 'choke', label: 'CHOKE', cls: 'vert2' })))),
+        K('vol', 'LEVEL'), K('pan', 'PAN'), seg({ key: 'choke', label: 'CHOKE', cls: 'vert2' })))),
   );
-  // global effects and master level live in the top bar
-  const fx = (id, tip) => num({ id, tip, cls: 'bar' });
-  document.getElementById('fx').append(h('label', {}, 'DLY'), fx('dly.time', 'Time'), fx('dly.fb', 'Feedback'), fx('dly.tone', 'Tone'),
-    h('label', {}, 'REV'), fx('rv.size', 'Size'), fx('rv.damp', 'Damping'), h('label', {}, 'VOL'), fx('vol', 'Master'));
+  // one page per effect; every channel has a send to each
+  const fxPages = [
+    h('div', { class: 'prow fxpage' }, box('DELAY', 'master', row(G('dly.time', 'TIME'), G('dly.fb', 'FEEDBACK'), G('dly.tone', 'TONE'), G('dly.lvl', 'LEVEL'))), sendsBox('dly')),
+    h('div', { class: 'prow fxpage' }, box('REVERB', 'master', row(G('rv.size', 'SIZE'), G('rv.damp', 'DAMPING'), G('rv.lvl', 'LEVEL'))), sendsBox('rev')),
+    h('div', { class: 'prow fxpage' }, box('CRUSHER', 'master', row(G('cr.drive', 'DRIVE'), G('cr.rate', 'DOWNSAMPLE'), G('cr.tone', 'TONE'), G('cr.lvl', 'LEVEL'))), sendsBox('crs')),
+  ];
+  panel.append(chPanel, ...fxPages);
+  document.getElementById('fx').append(h('label', {}, 'VOL'), num({ id: 'vol', tip: 'Master', cls: 'bar' }));
 
   // ---- macros ----
   const macros = document.getElementById('macros'), macEls = [];
@@ -240,8 +255,11 @@ export function buildUI(app) {
       for (const c of app.controls) if (!id || c.id === id || (c.key && id === `c${S.sel}.${c.key}`)) c.draw();
     },
     refreshTabs() {
+      fxTabs.forEach((el, k) => el.classList.toggle('on', S.tab === FX[k][0]));
+      chPanel.hidden = S.tab !== 'ch'; fxPages.forEach((el, k) => { el.hidden = S.tab !== FX[k][0]; });
+      for (const s of sendNames) s.el.textContent = `${s.c + 1} ${S.names[s.c]}`;
       tabEls.forEach((el, c) => {
-        el.classList.toggle('on', c === S.sel); el.lastChild.textContent = S.names[c];
+        el.classList.toggle('on', S.tab === 'ch' && c === S.sel); el.lastChild.textContent = S.names[c];
         el.style.setProperty('--mix', S.params[`c${c}.mix`]);
       });
       panel.style.setProperty('--mix', S.params[`c${S.sel}.mix`]);

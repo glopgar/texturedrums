@@ -12,7 +12,7 @@ const STR = {
     targets: '{0} controles',
     mTrig: 'Pasos: clic pone o quita, arrastra para pintar, Mayús+clic acento',
     mVel: 'Intensidad de cada paso: arrastra arriba/abajo', mProb: 'Probabilidad de que suene cada paso',
-    mNote: 'Nota (semitonos) de cada paso', mRoll: 'Redoble: repeticiones dentro del paso',
+    mNote: 'Nota (semitonos) de cada paso', mRoll: 'Redoble: repeticiones dentro del paso', mMix: 'Mezcla drum ↔ granos de cada paso: arrastra arriba (granos) o abajo (drum); clic derecho vuelve al mando MIX del canal',
     rndAll: 'Todo al azar', rndTip: 'Nuevo patrón al azar para esta pista', clear: 'Vaciar',
     evolve: 'Evolución', evolveTip: 'El patrón cambia poco a poco: cada pista según su control EVO', every: 'cada', bars: 'compases',
     revert: 'Volver', revertTip: 'Vuelve al patrón tal como lo dejaste', keep: 'Fijar', keepTip: 'Se queda con el patrón evolucionado como nuevo punto de partida',
@@ -23,7 +23,8 @@ const STR = {
     helpText: `<h2>TextureDrums</h2>
 <p>Diez canales iguales. Cada uno tiene una <b>voz de drum</b> (un circuito analógico modelado más un sample) y un <b>sampler granular</b>. <b>MIX</b> decide cuánto se oye de cada uno, y <b>MOD</b> hace que los granos modulen al drum: RING (lo multiplican), FM (le doblan el tono), FILTER (mueven el filtro) o GATE (el drum abre paso a los granos).</p>
 <p><b>Sampler granular</b>: elige o carga un sample. El bucle va de START a END, hacia delante, atrás o ping-pong, y cada punto tiene su LFO. Arrastra los marcadores sobre la onda. De ahí salen hasta 4 notas a la vez, cada una desde su OFFSET y con su PITCH. Con ENV en DRONE la textura suena mientras el secuenciador corre.</p>
-<p><b>Secuenciador</b>: 10 pistas de hasta 16 pasos. Los botones TRIG, VEL, PROB, NOTE y ROLL eligen qué se edita. Cada pista tiene su longitud (LEN), probabilidad (PROB) y evolución (EVO). El dado crea un patrón al azar. Con <b>Evolución</b> activa el patrón va cambiando alrededor del que escribiste: «Volver» lo recupera y «Fijar» se queda con el actual.</p>
+<p><b>Efectos</b>: delay, reverb y crusher tienen cada uno su pestaña (FX), con sus controles y el envío de los 10 canales. Cada canal tiene además sus tres envíos (0–100%) en SENDS.</p>
+<p><b>Secuenciador</b>: 10 pistas de hasta 16 pasos. Los botones TRIG, VEL, PROB, NOTE, ROLL y MIX eligen qué se edita; en MIX cada paso puede llevar su propia mezcla drum ↔ granos (los pasos sin valor usan el mando MIX del canal). Cada pista tiene su longitud (LEN), probabilidad (PROB) y evolución (EVO). El dado crea un patrón al azar. Con <b>Evolución</b> activa el patrón va cambiando alrededor del que escribiste: «Volver» lo recupera y «Fijar» se queda con el actual.</p>
 <p><b>Macros</b>: pulsa «Asignar» en una macro y mueve controles. Clic derecho en un control para quitarlo.</p>
 <p><b>Controles</b>: arrastra arriba/abajo o usa la rueda; Mayús = fino; doble clic = valor inicial. Teclas: Espacio = play, 1…0 = canal, Q…P = disparar canal. MIDI: notas 36–45 disparan los canales, CC 70–77 mueven las macros.</p>
 <p>Los samples de cajas de ritmos (CR-78, LinnDrum, Rhythm King, TR-505) son de dominio público; ver <code>samples/README.md</code>.</p>`,
@@ -40,7 +41,7 @@ const STR = {
     targets: '{0} controls',
     mTrig: 'Steps: click toggles, drag paints, Shift+click accents',
     mVel: 'Velocity of each step: drag up/down', mProb: 'Chance that each step plays',
-    mNote: 'Note (semitones) of each step', mRoll: 'Roll: repeats inside the step',
+    mNote: 'Note (semitones) of each step', mRoll: 'Roll: repeats inside the step', mMix: 'Drum ↔ grain mix of each step: drag up (grains) or down (drum); right-click goes back to the channel MIX knob',
     rndAll: 'Randomise all', rndTip: 'New random pattern for this track', clear: 'Clear',
     evolve: 'Evolve', evolveTip: 'The pattern changes little by little: each track by its EVO control', every: 'every', bars: 'bars',
     revert: 'Revert', revertTip: 'Back to the pattern as you left it', keep: 'Keep', keepTip: 'Keep the evolved pattern as the new starting point',
@@ -51,7 +52,8 @@ const STR = {
     helpText: `<h2>TextureDrums</h2>
 <p>Ten identical channels. Each has a <b>drum voice</b> (a modelled analog circuit plus a sample) and a <b>granular sampler</b>. <b>MIX</b> sets how much of each you hear, and <b>MOD</b> lets the grains modulate the drum: RING (multiply it), FM (bend its pitch), FILTER (move the filter) or GATE (the drum lets the grains through).</p>
 <p><b>Granular sampler</b>: pick or load a sample. The loop runs from START to END, forward, reverse or ping-pong, and each point has its own LFO. Drag the markers on the waveform. Up to 4 notes come out of it at once, each from its own OFFSET and at its own PITCH. With ENV on DRONE the texture sounds while the sequencer runs.</p>
-<p><b>Sequencer</b>: 10 tracks of up to 16 steps. TRIG, VEL, PROB, NOTE and ROLL choose what you edit. Each track has its own length (LEN), probability (PROB) and evolution (EVO). The dice makes a random pattern. With <b>Evolve</b> on, the pattern keeps changing around the one you wrote: "Revert" brings it back and "Keep" adopts the current one.</p>
+<p><b>Effects</b>: delay, reverb and crusher each have their own tab (FX), with their controls and the sends of all 10 channels. Each channel also has its three sends (0–100%) under SENDS.</p>
+<p><b>Sequencer</b>: 10 tracks of up to 16 steps. TRIG, VEL, PROB, NOTE, ROLL and MIX choose what you edit; in MIX each step can carry its own drum ↔ grain mix (steps without a value use the channel MIX knob). Each track has its own length (LEN), probability (PROB) and evolution (EVO). The dice makes a random pattern. With <b>Evolve</b> on, the pattern keeps changing around the one you wrote: "Revert" brings it back and "Keep" adopts the current one.</p>
 <p><b>Macros</b>: press "Assign" on a macro and move controls. Right-click a control to remove it.</p>
 <p><b>Controls</b>: drag up/down or use the wheel; Shift = fine; double-click = default. Keys: Space = play, 1…0 = channel, Q…P = trigger channel. MIDI: notes 36–45 trigger the channels, CC 70–77 move the macros.</p>
 <p>The drum machine samples (CR-78, LinnDrum, Rhythm King, TR-505) are public domain; see <code>samples/README.md</code>.</p>`,

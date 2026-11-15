@@ -26,7 +26,8 @@ Offline engine tests: every drum circuit, the granular sampler (pitch, loop mode
 - **Granular sampler**: pick a source (built-in textures, any drum machine sample, or your own file with *Load…* or by dropping it on the waveform). The loop runs from START to END — forward, reverse or ping-pong, at SPEED (0 freezes it) — and each loop point has its own LFO. Drag the markers on the waveform. Up to four **notes** sound at once, each a stream of grains read from its own OFFSET into the loop and at its own PITCH. ENV on TRIG gives plucked notes; on DRONE the texture holds while the sequencer runs and the steps only change its pitch.
 - **Drum**: twelve circuits (808 and 909 kick and snare, clap, hat, cymbal, tom, cowbell, rim, noise, FM) and a sample layer, blended with ANA ↔ SMP.
 - **Mix · Mod**: DRUM ↔ GRAIN sets how much of each you hear. *Grains modulate drum* makes the drum alien: RING (grains multiply it), FM (grains bend its pitch), FILTER (grains move the filter cutoff), GATE (the drum's envelope lets the grains through).
-- **Sequencer**: 10 tracks of up to 16 steps, all visible. TRIG / VEL / PROB / NOTE / ROLL choose the layer being edited: click and paint in TRIG (Shift+click = accent), drag up/down in the others, right-click resets a step. Each track has its own length (polymeters), probability and EVO amount, plus mute, solo and a dice for a random pattern.
+- **Effects**: three send effects — ping-pong delay, reverb and a crusher (downsampling and saturation) — each on its own FX tab with its controls and the sends of all ten channels side by side. Every channel also has its three sends (0–100%) in its own panel.
+- **Sequencer**: 10 tracks of up to 16 steps, all visible. TRIG / VEL / PROB / NOTE / ROLL / MIX choose the layer being edited: click and paint in TRIG (Shift+click = accent), drag up/down in the others, right-click resets a step. In the MIX layer a step can carry its own drum ↔ grain mix, which holds until the next step that plays; steps without one use the channel's MIX knob. Each track has its own length (polymeters), probability and EVO amount, plus mute, solo and a dice for a random pattern.
 - **Evolution**: with *Evolve* on, every 1–8 bars each track with EVO above zero changes a little (a hit slides, a ghost note appears, odds or notes shift) while staying close to the pattern you wrote. *Revert* brings your pattern back; *Keep* adopts the evolved one.
 - **Macros**: press *Assign* on a macro and move controls — where each starts is the macro's minimum, where you leave it the maximum. Hold Alt to assign the same control on all ten channels. Right-click a control to remove it.
 - **Controls**: drag up/down or use the wheel; Shift for fine adjustment; double-click resets. Keys: Space = play, `1…0` = select channel, `Q…P` = trigger channel. MIDI notes 36–45 trigger the channels, CC 70–77 move the macros.
@@ -41,7 +42,7 @@ Offline engine tests: every drum circuit, the granular sampler (pitch, loop mode
 | `dsp/grain.js` | Granular sampler: loop, loop LFOs, notes, grains |
 | `dsp/engine.js` | Channels (mix, modulation, filter, sends), sequencer, master |
 | `dsp/pattern.js` | Tracks, random patterns, evolution |
-| `dsp/fx.js` | Ping-pong delay and reverb |
+| `dsp/fx.js` | Ping-pong delay, reverb and crusher |
 | `dsp/textures.js` | Built-in granular sources, computed from formulas |
 | `dsp/wav.js` | WAV reader |
 | `dsp/worklet.js` | AudioWorklet wrapper |

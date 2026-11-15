@@ -8,7 +8,7 @@ import { buildSeq } from './seq.js';
 import { t, getLang, setLang } from './i18n.js';
 
 const LS_STATE = 'texturedrums.state', LS_PRESETS = 'texturedrums.presets';
-const S = { name: '', params: defaults(), names: [], gsrc: [], dsrc: [], pat: [], live: [], macros: emptyMacros(), sel: 0, mode: 'trig', learn: -1, running: false };
+const S = { name: '', params: defaults(), names: [], gsrc: [], dsrc: [], pat: [], live: [], macros: emptyMacros(), sel: 0, tab: 'ch', mode: 'trig', learn: -1, running: false };
 const app = { S, controls: [], sources: [] };
 let ctx = null, node = null, ui, seq, engineState = null, saveTimer = 0;
 const $ = (id) => document.getElementById(id);
@@ -56,7 +56,8 @@ app.setParam = (id, v) => {
   ui.refresh(id); if (d.key === 'mix') ui.refreshTabs();
   autosave();
 };
-app.select = (c) => { S.sel = c; post({ type: 'view', c }); ui.setView(null); ui.refresh(); ui.refreshTabs(); ui.refreshSources(); seq.drawAll(); };
+app.selectFx = (id) => { S.tab = id; ui.refreshTabs(); };
+app.select = (c) => { S.sel = c; S.tab = 'ch'; post({ type: 'view', c }); ui.setView(null); ui.refresh(); ui.refreshTabs(); ui.refreshSources(); seq.drawAll(); };
 app.rename = (c) => { const n = prompt(t('newName'), S.names[c]); if (n) { S.names[c] = n.slice(0, 10).toUpperCase(); ui.refreshTabs(); seq.drawAll(); autosave(); } };
 app.trig = async (c, vel = 0.9) => { await power(); post({ type: 'trig', c, vel, note: 0 }); };
 

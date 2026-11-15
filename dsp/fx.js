@@ -1,4 +1,4 @@
-// Send effects: ping-pong delay and a small feedback-delay-network reverb.
+// Send effects: ping-pong delay, a small feedback-delay-network reverb and a crusher.
 
 export class Delay {
   constructor(sr) {
@@ -6,7 +6,7 @@ export class Delay {
     this.bl = new Float32Array(this.n); this.br = new Float32Array(this.n);
     this.w = 0; this.ll = 0; this.lr = 0;
   }
-  process(inL, inR, outL, outR, n, time, fb, tone) {
+  process(inL, inR, outL, outR, n, time, fb, tone, lvl = 1) {
     const N = this.n, d = Math.max(1, Math.min(N - 1, Math.round(time))), c = 0.05 + tone * tone * 0.9;
     const bl = this.bl, br = this.br;
     let w = this.w, ll = this.ll, lr = this.lr;
@@ -15,7 +15,7 @@ export class Delay {
       ll += (bl[r] - ll) * c; lr += (br[r] - lr) * c;
       bl[w] = (inL[i] + inR[i]) * 0.7 + lr * fb;
       br[w] = ll * fb;
-      outL[i] += ll; outR[i] += lr;
+      outL[i] += ll * lvl; outR[i] += lr * lvl;
       if (++w >= N) w = 0;
     }
     this.w = w; this.ll = Math.abs(ll) < 1e-20 ? 0 : ll; this.lr = Math.abs(lr) < 1e-20 ? 0 : lr;
@@ -30,7 +30,8 @@ export class Reverb {
     this.pre = [new Float32Array(Math.round(0.011 * sr)), new Float32Array(Math.round(0.017 * sr))];
     this.pi = [0, 0];
   }
-  process(inL, inR, outL, outR, n, size, damp) {
+  process(inL, inR, outL, outR, n, size, damp, lvl = 1) {
+    lvl *= 0.3;
     const fb = 0.72 + size * 0.265, c = 1 - (0.05 + damp * 0.7), bufs = this.bufs, idx = this.idx, lp = this.lp, pre = this.pre, pi = this.pi;
     for (let i = 0; i < n; i++) {
       // one all-pass per side smears the input before it enters the network
@@ -51,8 +52,24 @@ export class Reverb {
         bufs[j][idx[j]] = (j & 1 ? xr : xl) * 0.5 + (lp[j] - sum) * fb;
         if (++idx[j] >= bufs[j].length) idx[j] = 0;
       }
-      outL[i] += oL * 0.3; outR[i] += oR * 0.3;
+      outL[i] += oL * lvl; outR[i] += oR * lvl;
     }
     for (let j = 0; j < 8; j++) if (Math.abs(lp[j]) < 1e-20) lp[j] = 0;
+  }
+}
+
+// Crusher: sample-and-hold (lower sample rate), hard saturation and a low-pass to tame it
+export class Crush {
+  constructor(sr) { this.sr = sr; this.hl = 0; this.hr = 0; this.count = 0; this.ll = 0; this.lr = 0; }
+  process(inL, inR, outL, outR, n, drive, rate, tone, lvl) {
+    const hold = 1 + rate * rate * 48 * this.sr / 48000, k = 1 + drive * drive * 30, nrm = lvl * 0.6 / Math.sqrt(k);
+    const c = 1 - Math.exp(-2 * Math.PI * Math.min(400 * Math.pow(40, tone), this.sr * 0.45) / this.sr);
+    let { hl, hr, count, ll, lr } = this;
+    for (let i = 0; i < n; i++) {
+      if (--count <= 0) { count += hold; hl = Math.tanh(inL[i] * k); hr = Math.tanh(inR[i] * k); }
+      ll += (hl - ll) * c; lr += (hr - lr) * c;
+      outL[i] += ll * nrm; outR[i] += lr * nrm;
+    }
+    this.hl = hl; this.hr = hr; this.count = count; this.ll = Math.abs(ll) < 1e-20 ? 0 : ll; this.lr = Math.abs(lr) < 1e-20 ? 0 : lr;
   }
 }

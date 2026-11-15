@@ -13,7 +13,7 @@ p.on('pageerror', (e) => errs.push('PAGEERROR ' + e.message + (e.stack || '').sp
 p.on('dialog', (d) => d.accept(d.type() === 'prompt' ? 'Mi preset' : undefined));
 await p.goto(PAGE, { waitUntil: 'networkidle' });
 await p.evaluate(() => { localStorage.clear(); }); await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(500);
-const S = (f) => p.evaluate(f);
+const S = (f, a) => p.evaluate(f, a);
 ok(await S(() => __app.S.name) === '808 + Strings', 'starts on the first factory preset');
 ok(await S(() => document.querySelector('.src').options.length) === 78, 'sample list has 78 entries');
 // audio
@@ -38,17 +38,35 @@ ok(await S(() => __app.S.live[0].prob[0]) === 0.5, 'PROB layer: drag down sets 5
 await p.click('.modes button:nth-child(4)');
 await p.mouse.move(c0.x + 10, c0.y + 10); await p.mouse.down(); await p.mouse.move(c0.x + 10, c0.y - 25, { steps: 5 }); await p.mouse.up();
 ok(await S(() => __app.S.live[0].note[0]) === 7, 'NOTE layer: drag up sets +7');
+await p.click('.modes button:nth-child(6)');
+await p.mouse.move(c0.x + 10, c0.y + 10); await p.mouse.down(); await p.mouse.move(c0.x + 10, c0.y - 80, { steps: 5 }); await p.mouse.up();
+{ const m = await S(() => [__app.S.live[0].mix[0], __app.S.pat[0].mix[0]]); ok(m[0] > 0.8 && m[0] === m[1], `MIX layer: drag up sets the step mix (${m})`); }
+ok(await S(() => document.querySelector('.cell[data-c="0"][data-i="0"]').classList.contains('lock')), 'step with its own mix is marked');
+await cell(0, 0).click({ button: 'right' }); ok(await S(() => __app.S.live[0].mix[0]) === -1, 'right-click returns the step to the channel mix');
 await p.click('.modes button:nth-child(1)');
 // knob drag + tab switch shows the other channel's value
-const kb = await p.locator('.knob', { hasText: 'SIZE' }).boundingBox();
+const kb = await p.locator('.pages .knob', { hasText: 'SIZE' }).boundingBox();
 await p.mouse.move(kb.x + 20, kb.y + 30); await p.mouse.down(); await p.mouse.move(kb.x + 20, kb.y - 50, { steps: 5 }); await p.mouse.up();
 const sz = await S(() => __app.S.params['c0.g.size']); ok(sz > 200, `knob drag changes the parameter (size ${Math.round(sz)} ms)`);
 await p.click('.tab:nth-child(3)');
 ok(await S(() => __app.S.sel === 2 && document.querySelector('.tab.on span').textContent === 'CP'), 'tab selects the channel');
-ok((await p.locator('.knob', { hasText: 'SIZE' }).locator('.kval').textContent()) === '40 ms', 'panel shows the selected channel values');
+ok((await p.locator('.pages .knob', { hasText: 'SIZE' }).locator('.kval').textContent()) === '40 ms', 'panel shows the selected channel values');
+// effect tabs: each effect has its own page, with the ten channel sends
+for (const [k, name, id] of [[11, 'DELAY', 'dly'], [12, 'REVERB', 'rev'], [13, 'CRUSHER', 'crs']]) {
+  await p.click(`.tab:nth-child(${k})`);
+  ok(await S(() => document.querySelector('.pages').hidden && document.querySelectorAll('.fxpage:not([hidden])').length === 1), `${name} tab shows only its page`);
+  ok(await p.locator('.fxpage:not([hidden]) .knob').count() >= 13, `${name} page has its controls and 10 sends`);
+  const k3 = await p.locator('.fxpage:not([hidden]) .box.wide .knob').nth(2).boundingBox();
+  await p.mouse.move(k3.x + 25, k3.y + 35); await p.mouse.down(); await p.mouse.move(k3.x + 25, k3.y - 300, { steps: 5 }); await p.mouse.up();
+  ok(await S((id) => __app.S.params[`c2.${id}`], id) === 1, `${name}: channel 3 send goes to 100%`);
+}
+await p.click('.tab:nth-child(3)');
+ok(await S(() => !document.querySelector('.pages').hidden && document.querySelectorAll('.fxpage:not([hidden])').length === 0), 'channel tab brings the channel panel back');
+ok((await p.locator('.pages .knob', { hasText: 'CRUSHER' }).locator('.kval').textContent()) === '100%', 'channel panel shows its three sends');
+await S(() => { for (const k of ['dly', 'rev', 'crs']) __app.setParam(`c2.${k}`, 0); });
 // macro: assign two knobs, then the macro moves both between the learned ends
 await p.click('.macro:nth-child(5) .massign');
-for (const name of ['CUTOFF', 'RESO']) { const k = await p.locator('.knob', { hasText: name }).boundingBox(); await p.mouse.move(k.x + 20, k.y + 30); await p.mouse.down(); await p.mouse.move(k.x + 20, k.y + (name === 'CUTOFF' ? 110 : -40), { steps: 5 }); await p.mouse.up(); }
+for (const name of ['CUTOFF', 'RESO']) { const k = await p.locator('.pages .knob', { hasText: name }).boundingBox(); await p.mouse.move(k.x + 20, k.y + 30); await p.mouse.down(); await p.mouse.move(k.x + 20, k.y + (name === 'CUTOFF' ? 110 : -40), { steps: 5 }); await p.mouse.up(); }
 await p.click('.macro:nth-child(5) .massign');
 const mac = await S(() => __app.S.macros[4]); ok(mac.targets.length === 2 && mac.targets[0].id === 'c2.f.cut', `macro learned 2 controls (${mac.targets.map((x) => x.id)})`);
 const hi = await S(() => [__app.S.params['c2.f.cut'], __app.S.params['c2.f.res']]);
@@ -57,7 +75,7 @@ ok(lo[0] === 18000 && Math.abs(lo[1] - 0.2) < 1e-6 && hi[0] < 9000 && hi[1] > 0.
 ok(await S(() => document.querySelectorAll('#panel .knob.mac').length) >= 2, 'assigned knobs are marked');
 // alt = same control on all channels
 await p.click('.macro:nth-child(6) .massign');
-{ const k = await p.locator('.knob', { hasText: 'LEVEL' }).boundingBox(); await p.keyboard.down('Alt'); await p.mouse.move(k.x + 20, k.y + 30); await p.mouse.down(); await p.mouse.move(k.x + 20, k.y + 70, { steps: 5 }); await p.mouse.up(); await p.keyboard.up('Alt'); }
+{ const k = await p.locator('.pages .knob', { hasText: 'LEVEL' }).boundingBox(); await p.keyboard.down('Alt'); await p.mouse.move(k.x + 20, k.y + 30); await p.mouse.down(); await p.mouse.move(k.x + 20, k.y + 70, { steps: 5 }); await p.mouse.up(); await p.keyboard.up('Alt'); }
 await p.click('.macro:nth-child(6) .massign');
 ok(await S(() => __app.S.macros[5].targets.length) === 10, 'Alt assigns the control on all 10 channels');
 // random, clear, evolve events, revert

@@ -3,7 +3,7 @@
 import { NCH, NSTEP, CH_PARAMS, GL_PARAMS, CK, GK, PMAP, EVO_BARS, rng } from './params.js';
 import { Drum } from './drums.js';
 import { Granular } from './grain.js';
-import { Delay, Reverb } from './fx.js';
+import { Delay, Reverb, Crush } from './fx.js';
 import { newTrack, cloneTrack, mutate, FIELDS } from './pattern.js';
 
 const BLOCK = 128;
@@ -17,20 +17,22 @@ class Channel {
     this.d = new Float32Array(BLOCK); this.fm = new Float32Array(BLOCK);
     this.f1l = 0; this.f2l = 0; this.f1r = 0; this.f2r = 0;
     this.fol = 0; this.pl = 0; this.pr = 0; this.level = 0;
-    this.gsrc = -1; this.dsrc = -1;
+    this.gsrc = -1; this.dsrc = -1; this.muted = false;
+    this.mixOv = -1; this.pgd = -1; this.pgg = 0;   // mix set by the last step (-1 = use the knob), and the gains last used
   }
-  trigger(vel, note) {
-    const p = this.p;
-    if (p[CK.mix] < 1 || p[CK.mod_type] > 0) this.drum.trigger(vel, note, p);
-    if (p[CK.mix] > 0 || p[CK.mod_type] > 0) this.gr.trigger(vel, note, p);
+  trigger(vel, note, mixOv = -1) {
+    const p = this.p, mix = mixOv >= 0 ? mixOv : p[CK.mix];
+    this.mixOv = mixOv;
+    if (mix < 1 || p[CK.mod_type] > 0) this.drum.trigger(vel, note, p);
+    if (mix > 0 || p[CK.mod_type] > 0) this.gr.trigger(vel, note, p);
   }
   choke() { this.drum.choke(); this.gr.choke(); }
 
-  // Adds n samples to the dry mix and to the two send buses.
-  render(n, L, R, dL, dR, rL, rR) {
-    const p = this.p, sr = this.sr, mix = p[CK.mix], mod = p[CK.mod_type] | 0, amt = p[CK.mod_amt];
+  // Adds n samples to the dry mix and to the three send buses (delay, reverb, crusher).
+  render(n, L, R, dL, dR, rL, rR, cL, cR) {
+    const p = this.p, sr = this.sr, mix = this.mixOv >= 0 ? this.mixOv : p[CK.mix], mod = p[CK.mod_type] | 0, amt = p[CK.mod_amt];
     const gL = this.gL, gR = this.gR, d = this.d;
-    const wantG = mix > 0 || mod > 0, wantD = mix < 1 || mod > 0;
+    const wantG = mix > 0 || mod > 0 || this.pgg > 0, wantD = mix < 1 || mod > 0 || this.pgd > 0;
     let live = false;
     for (let i = 0; i < n; i++) { gL[i] = 0; gR[i] = 0; }
     if (wantG && (this.gr.active || (p[CK.g_env] >= 0.5 && this.gr.hold))) { this.gr.render(gL, gR, n, p); live = true; }
@@ -55,8 +57,12 @@ class Channel {
       }
       this.fol = f < 1e-9 ? 0 : f;
     }
-    const gd = Math.min(1, 2 * (1 - mix)) * 0.7071, gg = Math.min(1, 2 * mix);
-    for (let i = 0; i < n; i++) { const x = d[i] * gd; gL[i] = gL[i] * gg + x; gR[i] = gR[i] * gg + x; }
+    const td = Math.min(1, 2 * (1 - mix)) * 0.7071, tg = Math.min(1, 2 * mix);
+    if (this.pgd < 0) { this.pgd = td; this.pgg = tg; }
+    let gd = this.pgd, gg = this.pgg;                  // glide to the new mix, so a step that changes it does not click
+    const id = (td - gd) / n, ig = (tg - gg) / n;
+    for (let i = 0; i < n; i++) { gd += id; gg += ig; const x = d[i] * gd; gL[i] = gL[i] * gg + x; gR[i] = gR[i] * gg + x; }
+    this.pgd = td; this.pgg = tg;
 
     if (ftype > 0) {                       // state-variable filter; in FILTER mode the grains move the cutoff
       const k = 2 - 1.92 * p[CK.f_res], fc = p[CK.f_cut], lim = sr * 0.3;
@@ -83,14 +89,14 @@ class Channel {
       const k = 1 + drive * 9, nrm = 1 / Math.sqrt(k);
       for (let i = 0; i < n; i++) { gL[i] = Math.tanh(gL[i] * k) * nrm; gR[i] = Math.tanh(gR[i] * k) * nrm; }
     }
-    const vol = p[CK.vol] * p[CK.vol] * 1.3, pan = (p[CK.pan] + 1) * Math.PI / 4;
-    const tl = vol * Math.cos(pan) * 1.414, tr = vol * Math.sin(pan) * 1.414, sd = p[CK.dly], sv = p[CK.rev];
+    const vol = this.muted ? 0 : p[CK.vol] * p[CK.vol] * 1.3, pan = (p[CK.pan] + 1) * Math.PI / 4;
+    const tl = vol * Math.cos(pan) * 1.414, tr = vol * Math.sin(pan) * 1.414, sd = p[CK.dly], sv = p[CK.rev], sc = p[CK.crs];
     let cl = this.pl, cr = this.pr, peak = 0;
     const il = (tl - cl) / n, ir = (tr - cr) / n;
     for (let i = 0; i < n; i++) {
       cl += il; cr += ir;
       const l = gL[i] * cl, r = gR[i] * cr;
-      L[i] += l; R[i] += r; dL[i] += l * sd; dR[i] += r * sd; rL[i] += l * sv; rR[i] += r * sv;
+      L[i] += l; R[i] += r; dL[i] += l * sd; dR[i] += r * sd; rL[i] += l * sv; rR[i] += r * sv; cL[i] += l * sc; cR[i] += r * sc;
       const a = l < 0 ? -l : l; if (a > peak) peak = a;
     }
     this.pl = tl; this.pr = tr;
@@ -107,12 +113,12 @@ export class Engine {
     this.pat = Array.from({ length: NCH }, newTrack); this.base = this.pat.map(cloneTrack);
     this.running = false; this.step = -1; this.toNext = 0;
     this.rc = new Int32Array(NCH); this.rt = new Float64Array(NCH); this.ri = new Float64Array(NCH);
-    this.rv = new Float64Array(NCH); this.rn = new Float64Array(NCH);
+    this.rv = new Float64Array(NCH); this.rn = new Float64Array(NCH); this.rm = new Float64Array(NCH);
     this.pos = new Int8Array(NCH).fill(-1);
     this.events = []; this.view = 0; this.peak = 0;
-    this.delay = new Delay(sr); this.reverb = new Reverb(sr);
+    this.delay = new Delay(sr); this.reverb = new Reverb(sr); this.crush = new Crush(sr);
     const b = () => new Float32Array(BLOCK);
-    this.mL = b(); this.mR = b(); this.dL = b(); this.dR = b(); this.rL = b(); this.rR = b();
+    this.mL = b(); this.mR = b(); this.dL = b(); this.dR = b(); this.rL = b(); this.rR = b(); this.cL = b(); this.cR = b();
   }
 
   setParam(id, v) {
@@ -143,10 +149,10 @@ export class Engine {
     this.running = false; this.pos.fill(-1); this.rc.fill(0);
     for (const c of this.ch) c.gr.hold = false;
   }
-  trig(c, vel = 0.8, note = 0) {
+  trig(c, vel = 0.8, note = 0, mix = -1) {
     const ch = this.ch[c], grp = ch.p[CK.choke] | 0;
     if (grp) for (const o of this.ch) if (o !== ch && (o.p[CK.choke] | 0) === grp) o.choke();
-    ch.trigger(vel, note);
+    ch.trigger(vel, note, mix);
   }
 
   advance() {
@@ -163,9 +169,9 @@ export class Engine {
       this.pos[c] = i;
       if (!t.on[i] || p[CK.mute] >= 0.5 || (solo && p[CK.solo] < 0.5)) continue;
       if (this.rnd() >= t.prob[i] * p[CK.prob]) continue;
-      this.trig(c, t.vel[i], t.note[i]);
+      this.trig(c, t.vel[i], t.note[i], t.mix[i]);
       const rat = t.rat[i] | 0;
-      if (rat > 1) { this.rc[c] = rat - 1; this.ri[c] = dur / rat; this.rt[c] = dur / rat; this.rv[c] = t.vel[i] * 0.8; this.rn[c] = t.note[i]; }
+      if (rat > 1) { this.rc[c] = rat - 1; this.ri[c] = dur / rat; this.rt[c] = dur / rat; this.rv[c] = t.vel[i] * 0.8; this.rn[c] = t.note[i]; this.rm[c] = t.mix[i]; }
       else this.rc[c] = 0;
     }
   }
@@ -179,6 +185,10 @@ export class Engine {
 
   process(L, R) {
     const N = L.length, g = this.g;
+    // mute and solo silence the channel itself (drones and tails included), not just its steps
+    let solo = false;
+    for (const c of this.ch) if (c.p[CK.solo] >= 0.5) solo = true;
+    for (const c of this.ch) c.muted = c.p[CK.mute] >= 0.5 || (solo && c.p[CK.solo] < 0.5);
     let o = 0;
     while (o < N) {
       let n = Math.min(BLOCK, N - o);
@@ -187,15 +197,16 @@ export class Engine {
         n = Math.min(n, Math.max(1, Math.ceil(this.toNext)));
         for (let c = 0; c < NCH; c++) {
           if (!this.rc[c]) continue;
-          if (this.rt[c] <= 0) { this.trig(c, this.rv[c], this.rn[c]); this.rc[c]--; this.rt[c] += this.ri[c]; }
+          if (this.rt[c] <= 0) { this.trig(c, this.rv[c], this.rn[c], this.rm[c]); this.rc[c]--; this.rt[c] += this.ri[c]; }
           if (this.rc[c]) n = Math.min(n, Math.max(1, Math.ceil(this.rt[c])));
         }
       }
-      const { mL, mR, dL, dR, rL, rR } = this;
-      for (let i = 0; i < n; i++) { mL[i] = mR[i] = dL[i] = dR[i] = rL[i] = rR[i] = 0; }
-      for (const c of this.ch) c.render(n, mL, mR, dL, dR, rL, rR);
-      this.delay.process(dL, dR, mL, mR, n, g[GK.dly_time] * this.sr * 15 / g[GK.bpm], g[GK.dly_fb], g[GK.dly_tone]);
-      this.reverb.process(rL, rR, mL, mR, n, g[GK.rv_size], g[GK.rv_damp]);
+      const { mL, mR, dL, dR, rL, rR, cL, cR } = this;
+      for (let i = 0; i < n; i++) { mL[i] = mR[i] = dL[i] = dR[i] = rL[i] = rR[i] = cL[i] = cR[i] = 0; }
+      for (const c of this.ch) c.render(n, mL, mR, dL, dR, rL, rR, cL, cR);
+      this.delay.process(dL, dR, mL, mR, n, g[GK.dly_time] * this.sr * 15 / g[GK.bpm], g[GK.dly_fb], g[GK.dly_tone], g[GK.dly_lvl]);
+      this.reverb.process(rL, rR, mL, mR, n, g[GK.rv_size], g[GK.rv_damp], g[GK.rv_lvl]);
+      this.crush.process(cL, cR, mL, mR, n, g[GK.cr_drive], g[GK.cr_rate], g[GK.cr_tone], g[GK.cr_lvl]);
       const vol = g[GK.vol] * g[GK.vol] * 1.2;
       let peak = this.peak * 0.999;
       for (let i = 0; i < n; i++) {

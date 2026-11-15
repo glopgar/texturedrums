@@ -163,6 +163,15 @@ function load(st, seed) {
     if (m !== 3) ok(diff(zero, ref) < 1e-4, `mod ${name}: amount 0 should leave the sound alone`);
     console.log(`  mod ${name.padEnd(6)} rms ${rms(x).toFixed(3)} (unmodulated ${rms(ref).toFixed(3)})`);
   });
+  // the three sends: each adds its effect, and an effect's level at 0 removes it again
+  const fxs = [['dly', 'dly.lvl'], ['rev', 'rv.lvl'], ['crs', 'cr.lvl']].map(([send, lvl]) => {
+    const mk = (level) => { const st = expand(FACTORY.find((f) => f.name === 'Init')); st.params[`c0.${send}`] = 1; st.params[lvl] = level; const en = load(st, 11); en.trig(0, 1, 0); return render(en, 1.5)[0]; };
+    const wet = mk(1), off = mk(0), plain = one({ 'd.model': 0 });
+    ok(finite(wet) && diff(wet, plain) > 0.005 && peak(wet) < 1, `send ${send}: no effect heard`);
+    ok(diff(off, plain) < 1e-6, `send ${send}: level 0 should leave only the dry sound`);
+    return diff(wet, plain).toFixed(3);
+  });
+  console.log('  sends (delay, reverb, crusher) add', fxs.join(' '));
   for (const ft of [1, 2, 3]) { const x = one({ 'f.type': ft, 'f.cut': 800, 'f.res': 1, drive: 1 }); ok(finite(x) && peak(x) < 1, `filter ${ft} at full resonance`); }
 }
 
@@ -197,6 +206,22 @@ function load(st, seed) {
   r = count(st, 2); ok(r.hits[0] === 0 && r.hits[1] === 16, 'mute');
   st.params['c0.mute'] = 0; st.params['c0.solo'] = 1;
   r = count(st, 2); ok(r.hits[0] === 16 && r.hits[1] === 0, 'solo');
+  // mute and solo also silence a drone, which sounds without any step
+  st = base(); st.params['c8.g.env'] = 1; st.params.vol = 1;
+  const dr = load(st, 1); dr.start();
+  ok(rms(render(dr, 1)[0], SR / 2) > 0.01, 'drone sounds while running');
+  dr.setParam('c8.mute', 1); ok(rms(render(dr, 1)[0], SR / 2) < 1e-5, 'mute silences a drone');
+  dr.setParam('c8.mute', 0); ok(rms(render(dr, 1)[0], SR / 2) > 0.01, 'unmute brings the drone back');
+  dr.setParam('c0.solo', 1); ok(rms(render(dr, 1)[0], SR / 2) < 1e-5, 'solo on another channel silences the drone');
+  // per-step mix: a step's own mix holds until the next step, which may go back to the knob
+  st = base(); st.pat[0] = fromString('x...x...x.......'); st.pat[0].mix[0] = 1; st.pat[0].mix[4] = 0.25;
+  const mx = load(st, 1), seen = []; mx.start();
+  for (const secs of [0.05, 0.5, 0.5]) { render(mx, secs); seen.push(mx.ch[0].mixOv); }   // just after steps 0, 4 and 8
+  ok(seen.join() === '1,0.25,-1', `per-step mix: ${seen}`);
+  const snd = (m) => { const q = base(); q.pat[0] = fromString('x...............'); q.pat[0].mix[0] = m; const e = load(q, 1); e.start(); return render(e, 0.4)[0]; };
+  const asDrum = snd(-1), asGrain = snd(1), half = snd(0.5);
+  ok(rms(asGrain) > 0.003 && rms(asDrum) > rms(asGrain) * 2 && rms(half) > rms(asGrain), `per-step mix changes the sound (${[asDrum, half, asGrain].map((x) => rms(x).toFixed(3))})`);
+  ok(finite(half) && Math.max(...Array.from(half.subarray(0, 64), Math.abs)) < 0.5, 'per-step mix: no jump at the step');
   // swing delays every second 16th
   st = base(); st.pat[0] = fromString('xxxxxxxxxxxxxxxx'); st.params.swing = 0.5;
   const en = load(st, 1), at = []; en.start();

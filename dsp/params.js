@@ -54,6 +54,7 @@ const C = [
   ['pan', -1, 1, 0],
   ['dly', 0, 1, 0],
   ['rev', 0, 1, 0],
+  ['crs', 0, 1, 0],                 // sends to the three effects: delay, reverb, crusher
   ['choke', 0, 4, 0, 'i'],
   // sequencer track
   ['len', 1, NSTEP, NSTEP, 'i'],
@@ -71,8 +72,14 @@ const G = [
   ['dly.time', 1, 8, 3, 'i'],       // in 16th notes
   ['dly.fb', 0, 0.95, 0.45],
   ['dly.tone', 0, 1, 0.5],
+  ['dly.lvl', 0, 1, 1],
   ['rv.size', 0, 1, 0.6],
   ['rv.damp', 0, 1, 0.5],
+  ['rv.lvl', 0, 1, 1],
+  ['cr.drive', 0, 1, 0.5],
+  ['cr.rate', 0, 1, 0.3],           // sample-rate reduction
+  ['cr.tone', 0, 1, 0.7],
+  ['cr.lvl', 0, 1, 0.7],
 ];
 export const EVO_BARS = [1, 2, 4, 8];
 
